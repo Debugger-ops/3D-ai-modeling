@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image to 3D Studio</title>
+<style>
+:root{--bg:#0e1014;--panel:#161920;--panel2:#1d212a;--line:#2a2f3a;--text:#e8eaf0;--mute:#8d95a6;--acc:#7c9cff;--acc2:#5b7bf0;--ok:#4cc38a;--bad:#ef6b6b;--warn:#f0b35b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+.ws{display:grid;grid-template-rows:46px 1fr 26px;grid-template-columns:310px 1fr 320px;height:100vh;grid-template-areas:"top top top" "left main right" "stat stat stat"}
+#top{grid-area:top;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap}
+#top .logo{font-weight:700;margin-right:8px}
+#top .sep{width:1px;height:22px;background:var(--line);margin:0 6px}
+#left{grid-area:left;background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:12px}
+#right{grid-area:right;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+main{grid-area:main;position:relative;min-width:0;background:linear-gradient(#1a1e27,#0e1014)}
+#view{position:absolute;inset:0}#view canvas{display:block}
+#stat{grid-area:stat;display:flex;align-items:center;gap:16px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--mute);font-size:12px}
+h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:16px 0 8px}
+h2:first-child{margin-top:0}
+button,select,input[type=number]{font:inherit}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}button:disabled{opacity:.45;cursor:not-allowed}
+button.on{background:#27315a;border-color:var(--acc)}
+button.primary{background:var(--acc2);border-color:var(--acc2);color:#fff;font-weight:600}
+select,input[type=number]{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);padding:2px}
+.row{margin:9px 0}.row>label{display:flex;justify-content:space-between;color:var(--mute);font-size:12px;margin-bottom:2px}.row>label b{color:var(--text);font-weight:500}
+.chk{display:flex;align-items:center;gap:8px;margin:6px 0}.chk input{accent-color:var(--acc)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.note{color:var(--mute);font-size:12px;margin-top:5px}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:10px;text-align:center;color:var(--mute);cursor:pointer;background:var(--panel2)}
+.drop.over{border-color:var(--acc);color:var(--text)}.drop img{max-width:100%;max-height:130px;border-radius:6px;display:block;margin:0 auto 6px}.drop b{color:var(--text)}
+.card{display:block;width:100%;text-align:left;margin:6px 0;padding:8px 10px}.card b{display:block}.card span{color:var(--mute);font-size:12px}
+.tabs{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+.tabs button{flex:1;border:0;border-radius:0;background:none;padding:10px 4px;color:var(--mute);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--text);border-bottom-color:var(--acc);background:none}
+.tab{display:none;padding:12px}.tab.on{display:block}
+.kv{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)}.kv span:first-child{color:var(--mute)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.hist{display:flex;gap:6px;flex-wrap:wrap}.hist img{width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid transparent;cursor:pointer}.hist img.on{border-color:var(--acc)}
+.dim{position:absolute;pointer-events:none;background:#0e1014cc;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;color:#cfe;transform:translate(-50%,-50%);display:none}
+#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#0e1014cc;z-index:5}#overlay.show{display:flex}
+#overlay .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 22px;width:min(420px,90%)}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:12px 0 6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mute);text-align:center;pointer-events:none;padding:20px}
+.banner{background:#3a2a14;border:1px solid #6b4a1c;color:var(--warn);padding:8px 10px;border-radius:8px;font-size:12px;margin-bottom:10px;display:none}
+a{color:var(--acc)}
+@media (max-width:1000px){.ws{grid-template-columns:1fr;grid-template-rows:46px 50vh auto auto 26px;grid-template-areas:"top" "main" "left" "right" "stat";height:auto;overflow:auto}html,body{overflow:auto}}
+</style>
+</head>
+<body>
+<div class="ws">
+  <div id="top">
+    <span class="logo">Image to 3D Studio</span>
+    <button id="importBtn" title="Open an existing GLB / OBJ / STL / PLY model">Import model</button><input id="impFile" type="file" accept=".glb,.gltf,.obj,.stl,.ply,.off,.3mf" hidden>
+    <span class="sep"></span>
+    <button data-shade="shaded" class="on">Shaded</button><button data-shade="clay">Clay</button><button data-shade="normals">Normals</button><button data-shade="wire">Wire</button><button data-shade="xray">X-ray</button>
+    <span class="sep"></span>
+    <button data-cam="front">Front</button><button data-cam="right">Right</button><button data-cam="back">Back</button><button data-cam="top">Top</button><button data-cam="iso">Iso</button>
+    <button id="ortho" title="Orthographic / perspective">Ortho</button>
+    <span class="sep"></span>
+    <button id="snap">Snapshot</button>
+    <a href="relief.html" target="_blank" style="margin-left:auto;font-size:12px">Quick relief tool</a>
+  </div>
+
+  <aside id="left">
+    <div class="banner" id="banner"></div>
+    <h2>1 · Source image</h2>
+    <div class="drop" id="drop"><div id="dropInner"><b>Drop an image</b>, click to browse, or paste</div><input id="file" type="file" accept="image/*,.heic,.heif" hidden></div>
+
+    <h2>2 · Method</h2>
+    <button class="card on" data-method="inflate"><b>Inflate silhouette</b><span>Drawings, logos, sketches. Instant, offline, always printable.</span></button>
+    <button class="card" data-method="depth"><b>Depth sculpt (local AI)</b><span>Drawings &amp; photos. Free, offline. AI reads depth so scales, horns and features stand out.</span></button>
+    <button class="card" data-method="cloud"><b>Cloud HQ (TRELLIS)</b><span>Photos &amp; renders. Best quality. Uploads image, 1-3 min.</span></button>
+    <button class="card" data-method="ai"><b>Local AI (TripoSR)</b><span>Photos &amp; renders, offline. Lower quality, slow on Mac.</span></button>
+
+    <div id="infOpts">
+      <div class="row"><label>Puffiness (thickness) <b id="vPuff">30%</b></label><input id="puff" type="range" min="5" max="60" value="30"></div>
+      <div class="row"><label>Engrave pen lines <b id="vDet">50%</b></label><input id="detail" type="range" min="0" max="100" value="50"></div>
+      <div class="chk"><input type="checkbox" id="flatBack" checked><label for="flatBack">Flat back (prints without supports)</label></div>
+    </div>
+    <div id="aiOpts" style="display:none">
+      <div class="chk"><input type="checkbox" id="removeBg" checked><label for="removeBg">Remove background (recommended)</label></div>
+      <div class="row"><label>Object size in frame <b id="vFg">85%</b></label><input id="fg" type="range" min="50" max="100" value="85"></div>
+    </div>
+    <div class="row"><label>Mesh detail</label><select id="res"><option value="128">Low (fast)</option><option value="256" selected>Standard</option><option value="320">High</option></select></div>
+    <button class="primary" id="go" style="width:100%;padding:10px" disabled>Generate 3D model</button>
+    <div class="note" id="methodNote"></div>
+
+    <h2>Session</h2>
+    <div class="hist" id="hist"></div>
+    <div class="note" id="histNote">Models you generate or import appear here.</div>
+  </aside>
+
+  <main>
+    <div id="view"></div>
+    <div class="dim" id="dW"></div><div class="dim" id="dH"></div><div class="dim" id="dD"></div>
+    <div class="empty" id="empty">Add an image and press Generate, or import an existing model.</div>
+    <div id="overlay"><div class="box"><div id="ovStage" style="font-weight:600">Working…</div><div class="bar"><i id="ovBar"></i></div><div class="note" id="ovNote"></div></div></div>
+  </main>
+
+  <aside id="right">
+    <div class="tabs"><button data-tab="model" class="on">Model</button><button data-tab="look">Look</button><button data-tab="scene">Scene</button><button data-tab="info">Info</button><button data-tab="export">Export</button></div>
+
+    <div class="tab on" id="tab-model">
+      <h2>Orientation</h2>
+      <div class="grid4"><button id="rotX">Rot X</button><button id="rotY">Rot Y</button><button id="rotZ">Rot Z</button><button id="mirror">Mirror</button></div>
+      <div class="note">Each Rot click turns the model 90°. Use these until it stands upright.</div>
+      <h2>Clean-up</h2>
+      <div class="chk"><input type="checkbox" id="clean" checked><label for="clean">Remove floating bits</label></div>
+      <div class="row"><label>Smooth surface <b id="vSm">0</b></label><input id="smooth" type="range" min="0" max="20" value="0"></div>
+      <div class="row"><label>Simplify (keep % of triangles) <b id="vDec">100%</b></label><input id="decimate" type="range" min="5" max="100" value="100"></div>
+      <h2>Base</h2>
+      <div class="row"><label>Flat cut (trim bottom) <b id="vCut">0%</b></label><input id="cut" type="range" min="0" max="40" value="0"></div>
+      <div class="row"><label>Plinth thickness <b id="vPl">0 mm</b></label><input id="plinth" type="range" min="0" max="20" step="0.5" value="0"></div>
+      <button id="resetEdits" style="width:100%;margin-top:10px">Reset all edits</button>
+    </div>
+
+    <div class="tab" id="tab-look">
+      <h2>Shading</h2>
+      <select id="shade"><option value="shaded">Shaded (colours)</option><option value="clay">Clay</option><option value="normals">Normals</option><option value="wire">Wireframe</option><option value="xray">X-ray</option></select>
+      <div class="chk"><input type="checkbox" id="vcol" checked><label for="vcol">Use model colours</label></div>
+      <div class="row"><label>Tint / clay colour</label><input type="color" id="tint" value="#ffffff"></div>
+      <div class="row"><label>Roughness <b id="vRo">0.80</b></label><input id="rough" type="range" min="0" max="1" step="0.05" value="0.8"></div>
+      <div class="row"><label>Metalness <b id="vMe">0.00</b></label><input id="metal" type="range" min="0" max="1" step="0.05" value="0"></div>
+    </div>
+
+    <div class="tab" id="tab-scene">
+      <h2>Lighting</h2>
+      <select id="light"><option value="studio">Studio</option><option value="soft">Soft</option><option value="dramatic">Dramatic</option><option value="flat">Flat</option></select>
+      <div class="row"><label>Light intensity <b id="vLi">1.0</b></label><input id="lint" type="range" min="0.2" max="2.5" step="0.1" value="1"></div>
+      <h2>Background</h2>
+      <select id="bg"><option value="grad">Gradient</option><option value="dark">Dark</option><option value="mid">Grey</option><option value="light">Light</option><option value="transparent">Transparent (snapshots)</option></select>
+      <h2>Helpers</h2>
+      <div class="chk"><input type="checkbox" id="showGrid" checked><label for="showGrid">Floor grid</label></div>
+      <div class="chk"><input type="checkbox" id="showShadow" checked><label for="showShadow">Ground shadow</label></div>
+      <div class="chk"><input type="checkbox" id="showAxes"><label for="showAxes">Axes</label></div>
+      <div class="chk"><input type="checkbox" id="showDims" checked><label for="showDims">Bounding box + dimensions (mm)</label></div>
+      <div class="chk"><input type="checkbox" id="spin"><label for="spin">Turntable (auto-rotate)</label></div>
+      <div class="row"><label>Turntable speed <b id="vSp">2.0</b></label><input id="spinSpeed" type="range" min="0.5" max="8" step="0.5" value="2"></div>
+      <button id="fit" style="width:100%">Fit model to view</button>
+    </div>
+
+    <div class="tab" id="tab-info">
+      <h2>Measurements (as exported)</h2>
+      <div id="infoBox" class="note">Generate or import a model to see measurements.</div>
+      <h2>Printability</h2>
+      <div class="row"><label>Printer bed</label>
+        <select id="bed"><option value="180x180x180">180 × 180 mm (small)</option><option value="220x220x250" selected>220 × 220 mm (Ender-class)</option><option value="250x210x210">250 × 210 mm (Prusa MK)</option><option value="256x256x256">256 × 256 mm (Bambu)</option></select></div>
+      <div id="printChecks"></div>
+    </div>
+
+    <div class="tab" id="tab-export">
+      <h2>Size</h2>
+      <div class="row"><label>Size (mm) <b>height, or longest side if flat</b></label><input id="height" type="number" min="1" max="2000" value="80"></div>
+      <div class="chk"><input type="checkbox" id="layFlat"><label for="layFlat">STL: print flat on its back (plaques / reliefs)</label></div>
+      <h2>Download</h2>
+      <div class="grid2"><button class="primary" data-fmt="stl" disabled>STL · printing</button><button class="primary" data-fmt="obj" disabled>OBJ · Blender</button><button class="primary" data-fmt="glb" disabled>GLB · web / AR</button><button class="primary" data-fmt="ply" disabled>PLY · colours</button></div>
+      <div class="note" id="exportNote">STL is Z-up, in mm, resting on the bed, with holes closed. Other formats keep vertex colours.</div>
+    </div>
+  </aside>
+
+  <div id="stat"><span id="sModel">No model</span><span id="sTris"></span><span id="sSize"></span><span style="margin-left:auto">Drag = orbit · scroll = zoom · right-drag = pan</span></div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const $ = id => document.getElementById(id);
+const $$ = sel => [...document.querySelectorAll(sel)];
+window.__i3d = {THREE};
+
+/* ================= viewport ================= */
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setClearColor(0x000000, 0);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const persp = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
+const ortho = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.05, 200);
+let cam = persp; persp.position.set(3.2, 2.6, 4.6);
+const controls = new OrbitControls(cam, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 1, 0);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x445066, 1);
+const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(-3, 5, 4); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, {left:-4, right:4, top:4, bottom:-4, near:0.5, far:20}); key.shadow.bias = -0.0004;
+const rim = new THREE.DirectionalLight(0x9db4ff, 0.8); rim.position.set(4, 2, -4);
+const fill = new THREE.DirectionalLight(0xffffff, 0.3); fill.position.set(4, 1, 3);
+scene.add(hemi, key, rim, fill);
+const grid = new THREE.GridHelper(8, 32, 0x3a4152, 0x23283a); scene.add(grid);
+const axes = new THREE.AxesHelper(1.5); axes.visible = false; scene.add(axes);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({opacity:.35}));
+ground.rotation.x = -Math.PI/2; ground.position.y = -0.001; ground.receiveShadow = true; scene.add(ground);
+let bbox = null;
+Object.assign(window.__i3d, {scene, hemi, key, rim, fill, renderer});
+
+function resize(){
+  const w = view.clientWidth, h = view.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h); const a = w/h;
+  persp.aspect = a; persp.updateProjectionMatrix();
+  ortho.left = -3*a; ortho.right = 3*a; ortho.top = 3; ortho.bottom = -3; ortho.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+new ResizeObserver(resize).observe(view);
+
+const dimEls = {w:$('dW'), h:$('dH'), d:$('dD')};
+let dims = null, model = null, modelBox = new THREE.Box3();
+function placeDim(el, p){
+  const v = p.clone().project(cam);
+  if (v.z > 1) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.style.left = ((v.x+1)/2*view.clientWidth) + 'px'; el.style.top = ((1-v.y)/2*view.clientHeight) + 'px';
+}
+(function loop(){
+  requestAnimationFrame(loop);
+  controls.autoRotate = $('spin').checked; controls.autoRotateSpeed = +$('spinSpeed').value;
+  controls.update(); renderer.render(scene, cam);
+  const show = model && dims && $('showDims').checked;
+  for (const e of Object.values(dimEls)) if (!show) e.style.display = 'none';
+  if (show){
+    const b = modelBox;
+    placeDim(dimEls.w, new THREE.Vector3((b.min.x+b.max.x)/2, b.min.y, b.max.z));
+    placeDim(dimEls.h, new THREE.Vector3(b.max.x, (b.min.y+b.max.y)/2, b.max.z));
+    placeDim(dimEls.d, new THREE.Vector3(b.max.x, b.min.y, (b.min.z+b.max.z)/2));
+  }
+})();
+
+/* ---- camera presets / ortho ---- */
+function goCam(name){
+  const b = modelBox.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1,0,-1), new THREE.Vector3(1,2,1)) : modelBox;
+  const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()), r = Math.max(s.x, s.y, s.z) * 1.9 + 1.2;
+  const dir = {front:[0,.15,1], back:[0,.15,-1], right:[1,.15,0], left:[-1,.15,0], top:[0,1,.001], iso:[.75,.6,.95]}[name] || [.75,.6,.95];
+  const d = new THREE.Vector3(...dir).normalize().multiplyScalar(r);
+  cam.position.copy(c).add(d); controls.target.copy(c);
+  if (cam === ortho) cam.zoom = 3.2 / (Math.max(s.x, s.y, s.z) * 0.62);
+  cam.updateProjectionMatrix(); controls.update();
+}
+$$('[data-cam]').forEach(b => b.onclick = () => goCam(b.dataset.cam));
+$('fit').onclick = () => goCam('iso');
+$('ortho').onclick = () => {
+  const p = cam.position.clone(), t = controls.target.clone();
+  cam = cam === persp ? ortho : persp;
+  cam.position.copy(p); controls.object = cam; controls.target.copy(t);
+  $('ortho').classList.toggle('on', cam === ortho);
+  if (cam === ortho) goCam('iso');
+  controls.update();
+};
+
+/* ---- look: shading, lights, background ---- */
+let shade = 'shaded';
+function makeMaterial(){
+  const tint = new THREE.Color($('tint').value);
+  if (shade === 'normals') return new THREE.MeshNormalMaterial();
+  if (shade === 'wire') return new THREE.MeshBasicMaterial({color:0x9db4ff, wireframe:true});
+  const clay = shade === 'clay';
+  const m = new THREE.MeshStandardMaterial({
+    color: clay ? (tint.getHex() === 0xffffff ? 0xd6d6d6 : tint) : tint,
+    vertexColors: !clay && $('vcol').checked, roughness: clay ? 0.9 : +$('rough').value, metalness: clay ? 0 : +$('metal').value,
+  });
+  if (shade === 'xray'){ m.transparent = true; m.opacity = 0.35; m.depthWrite = false; m.side = THREE.DoubleSide; }
+  return m;
+}
+function applyLook(){
+  if (!model) return;
+  model.traverse(o => { if (o.isMesh){ o.material?.dispose(); o.material = makeMaterial(); o.castShadow = shade !== 'xray'; o.receiveShadow = true; } });
+}
+function setShade(s){
+  shade = s; $('shade').value = s;
+  $$('[data-shade]').forEach(b => b.classList.toggle('on', b.dataset.shade === s)); applyLook();
+}
+$$('[data-shade]').forEach(b => b.onclick = () => setShade(b.dataset.shade));
+$('shade').onchange = e => setShade(e.target.value);
+['vcol','tint'].forEach(id => $(id).oninput = applyLook);
+$('rough').oninput = () => { $('vRo').textContent = (+$('rough').value).toFixed(2); applyLook(); };
+$('metal').oninput = () => { $('vMe').textContent = (+$('metal').value).toFixed(2); applyLook(); };
+
+const LIGHTS = {
+  studio:   {h:1.0, k:2.0, r:0.8, f:0.3, bgc:0x445066},
+  soft:     {h:2.0, k:0.8, r:0.4, f:0.6, bgc:0x667088},
+  dramatic: {h:0.25, k:3.4, r:1.4, f:0.0, bgc:0x1a1d26},
+  flat:     {h:2.6, k:0.0, r:0.0, f:0.0, bgc:0x888ea0},
+};
+function applyLights(){
+  const L = LIGHTS[$('light').value], k = +$('lint').value; $('vLi').textContent = k.toFixed(1);
+  hemi.intensity = L.h*k; key.intensity = L.k*k; rim.intensity = L.r*k; fill.intensity = L.f*k; hemi.groundColor.setHex(L.bgc);
+}
+$('light').onchange = applyLights; $('lint').oninput = applyLights; applyLights();
+$('spinSpeed').oninput = () => $('vSp').textContent = (+$('spinSpeed').value).toFixed(1);
+function applyBg(){
+  const v = $('bg').value, m = document.querySelector('main');
+  m.style.background = {grad:'linear-gradient(#1a1e27,#0e1014)', dark:'#0e1014', mid:'#4a4f5c', light:'#e6e9f0', transparent:'repeating-conic-gradient(#2a2f3a 0% 25%, #1d212a 0% 50%) 50%/20px 20px'}[v];
+  grid.visible = $('showGrid').checked && v !== 'transparent';
+}
+$('bg').onchange = applyBg;
+$('showGrid').onchange = applyBg; applyBg();
+$('showShadow').onchange = () => ground.visible = $('showShadow').checked;
+$('showAxes').onchange = () => axes.visible = $('showAxes').checked;
+$('snap').onclick = () => {
+  const bgTrans = $('bg').value === 'transparent';
+  const prevGrid = grid.visible; if (bgTrans) grid.visible = false;
+  renderer.render(scene, cam);
+  const c = document.createElement('canvas'); c.width = renderer.domElement.width; c.height = renderer.domElement.height;
+  const g = c.getContext('2d');
+  if (!bgTrans){ const bg = getComputedStyle(document.querySelector('main')).backgroundColor; g.fillStyle = (bg && bg !== 'rgba(0, 0, 0, 0)') ? bg : '#14171d'; g.fillRect(0,0,c.width,c.height); }
+  g.drawImage(renderer.domElement, 0, 0);
+  const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'snapshot.png'; a.click();
+  grid.visible = prevGrid;
+};
+
+/* ================= state ================= */
+let method = 'inflate', file = null, job = null, session = [];
+const edits = {rx:0, ry:0, rz:0, mirror:false};
+const exportBtns = $$('[data-fmt]');
+const setReady = ok => exportBtns.forEach(b => b.disabled = !ok);
+const editQuery = () => new URLSearchParams({clean:$('clean').checked, smooth:$('smooth').value, rx:edits.rx, ry:edits.ry, rz:edits.rz,
+  mirror:edits.mirror, decimate:$('decimate').value, cut:$('cut').value});
+const sizeMm = () => Math.max(1, +$('height').value || 80);
+const plinthMm = () => +$('plinth').value;
+const previewUrl = () => `/api/jobs/${job.id}/export?format=glb&height_mm=100&plinth=${(plinthMm()*100/sizeMm()).toFixed(3)}&${editQuery()}`;
+const infoUrl = () => `/api/jobs/${job.id}/info?height_mm=${sizeMm()}&lay_flat=${$('layFlat').checked}&plinth=${plinthMm()}&${editQuery()}`;
+
+/* ================= tabs ================= */
+$$('[data-tab]').forEach(b => b.onclick = () => {
+  $$('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
+  $$('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'info') refreshInfo();
+});
+
+/* ================= load model into viewport ================= */
+async function showModel(refit){
+  const gltf = await new GLTFLoader().loadAsync(previewUrl());
+  if (model){ scene.remove(model); model.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); }
+  if (bbox){ scene.remove(bbox); bbox = null; }
+  model = gltf.scene; scene.add(model);
+  model.traverse(o => { if (o.isMesh && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });   // safety net
+  let box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3());
+  const s = 2.4 / Math.max(size.y, size.x*0.9, size.z*0.9, 1e-6);       // ~2.4 units tall
+  model.scale.setScalar(s); box.setFromObject(model);
+  const c = box.getCenter(new THREE.Vector3()); model.position.set(-c.x, -box.min.y, -c.z);
+  modelBox.setFromObject(model);
+  bbox = new THREE.Box3Helper(modelBox, 0x6b7aa8); bbox.visible = $('showDims').checked; scene.add(bbox);
+  key.target.position.set(0, 1, 0); scene.add(key.target);
+  applyLook(); $('empty').style.display = 'none';
+  if (refit) goCam('iso');
+}
+$('showDims').onchange = () => { if (bbox) bbox.visible = $('showDims').checked; };
+
+async function refreshInfo(){
+  if (!job || job.status !== 'done') return;
+  try{
+    const i = await (await fetch(infoUrl())).json(); dims = i;
+    const [w,h,d] = i.view_size || [0,0,0];
+    dimEls.w.textContent = w.toFixed(1)+' mm'; dimEls.h.textContent = h.toFixed(1)+' mm'; dimEls.d.textContent = d.toFixed(1)+' mm';
+    const [x,y,z] = i.size;
+    $('sModel').textContent = job.name || job.id; $('sTris').textContent = i.faces.toLocaleString()+' triangles'; $('sSize').textContent = `${x} × ${y} × ${z} mm (STL)`;
+    $('infoBox').innerHTML = `
+      <div class="kv"><span>Source</span><span>${i.source}</span></div>
+      <div class="kv"><span>Triangles</span><span>${i.faces.toLocaleString()}</span></div>
+      <div class="kv"><span>Vertices</span><span>${i.vertices.toLocaleString()}</span></div>
+      <div class="kv"><span>Size (X × Y × Z)</span><span>${x} × ${y} × ${z} mm</span></div>
+      <div class="kv"><span>Volume</span><span>${i.volume_cm3 == null ? '—' : i.volume_cm3+' cm³'}</span></div>
+      <div class="kv"><span>Surface area</span><span>${i.area_cm2} cm²</span></div>
+      <div class="kv"><span>Closed (watertight)</span><span class="${i.watertight?'ok':'bad'}">${i.watertight?'yes':'no'}</span></div>
+      <div class="kv"><span>Repair applied</span><span>${i.repair || 'none'}</span></div>`;
+    const [bx,by,bz] = $('bed').value.split('x').map(Number), fits = Math.max(x,y) <= Math.max(bx,by) && Math.min(x,y) <= Math.min(bx,by) && z <= bz;
+    const checks = [
+      [i.watertight, 'Closed solid', 'Not closed - STL export will auto-repair, but check in your slicer'],
+      [fits, `Fits ${bx}×${by}×${bz} mm bed`, `Too big for ${bx}×${by}×${bz} mm bed - lower the Size`],
+      [Math.min(x,y,z) >= 1, 'No paper-thin dimension', 'Thinnest side under 1 mm - raise Puffiness / plinth'],
+      [$('layFlat').checked || z/ Math.max(1,Math.min(x,y)) < 3, 'Stable footprint', 'Tall and narrow - consider a plinth'],
+    ];
+    $('printChecks').innerHTML = checks.map(([ok,g,b]) => `<div class="kv"><span class="${ok?'ok':'warn'}">${ok?'✓':'!'} ${ok?g:b}</span><span></span></div>`).join('');
+  }catch(e){ console.error(e); }
+}
+$('bed').onchange = refreshInfo;
+
+/* ================= edits ================= */
+let t;
+const refresh = (refit=false) => { if (!job || job.status !== 'done') return; clearTimeout(t); t = setTimeout(async () => { await showModel(refit); refreshInfo(); }, 220); };
+const bindRange = (id, label, fmt) => $(id).addEventListener('input', () => { $(label).textContent = fmt($(id).value); refresh(); });
+bindRange('smooth','vSm', v => v); bindRange('decimate','vDec', v => v+'%'); bindRange('cut','vCut', v => v+'%'); bindRange('plinth','vPl', v => v+' mm');
+$('clean').onchange = () => refresh();
+$('rotX').onclick = () => { edits.rx = (edits.rx+90)%360; refresh(true); };
+$('rotY').onclick = () => { edits.ry = (edits.ry+90)%360; refresh(true); };
+$('rotZ').onclick = () => { edits.rz = (edits.rz+90)%360; refresh(true); };
+$('mirror').onclick = () => { edits.mirror = !edits.mirror; $('mirror').classList.toggle('on', edits.mirror); refresh(); };
+function resetEdits(){
+  Object.assign(edits, {rx:0, ry:0, rz:0, mirror:false}); $('mirror').classList.remove('on');
+  for (const [id,v,l,f] of [['smooth',0,'vSm',x=>x],['decimate',100,'vDec',x=>x+'%'],['cut',0,'vCut',x=>x+'%'],['plinth',0,'vPl',x=>x+' mm']]){ $(id).value = v; $(l).textContent = f(v); }
+  $('clean').checked = true;
+}
+$('resetEdits').onclick = () => { resetEdits(); refresh(true); };
+$('height').addEventListener('change', () => { refresh(); });
+$('layFlat').onchange = refreshInfo;
+
+/* ================= source image + method ================= */
+const NOTES = {
+  inflate: 'Cuts out the outline, puffs it into a solid dome and engraves the dark lines. Always closed and printable.',
+  depth: 'A local depth-estimation AI sculpts the surface from your image: more defined than Inflate. First run downloads ~490 MB. Raise Detail for crisper features; untick Flat back for a full-round body.',
+  cloud: 'Sends the image to a free hosted model (TRELLIS on Hugging Face). Needs internet; the image leaves your computer.',
+  ai: 'Local AI guesses the hidden back, so it needs a shaded colour photo or render. Flat line art gives lumpy results.',
+};
+function setMethod(m){
+  method = m; $$('[data-method]').forEach(b => b.classList.toggle('on', b.dataset.method === m));
+  $('infOpts').style.display = (m === 'inflate' || m === 'depth') ? '' : 'none'; $('aiOpts').style.display = m === 'ai' ? '' : 'none';
+  $('methodNote').textContent = NOTES[m];
+}
+$$('[data-method]').forEach(b => b.onclick = () => setMethod(b.dataset.method)); setMethod('inflate');
+$('puff').oninput = () => $('vPuff').textContent = $('puff').value+'%';
+$('detail').oninput = () => $('vDet').textContent = $('detail').value+'%';
+$('fg').oninput = () => $('vFg').textContent = $('fg').value+'%';
+
+function setFile(f){
+  if (!f || !(f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name))) return; file = f;
+  $('dropInner').innerHTML = `<img src="${URL.createObjectURL(f)}" onerror="this.style.display='none'"><b>${f.name}</b><br>click to change`;
+  $('go').disabled = false;
+}
+$('drop').onclick = () => $('file').click(); $('file').onchange = e => setFile(e.target.files[0]);
+['dragenter','dragover'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave','drop'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (!f) return; /\.(glb|gltf|obj|stl|ply|off|3mf)$/i.test(f.name) ? importModel(f) : setFile(f); });
+addEventListener('paste', e => { for (const it of e.clipboardData.items) if (it.type.startsWith('image/')) setFile(it.getAsFile()); });
+
+fetch('/api/health').then(r => r.json()).then(h => {
+  if (!h.ready){ const b = $('banner'); b.style.display = 'block'; b.innerHTML = '<b>Local AI not installed</b> (Inflate, Cloud and Import still work): ' + h.problems.slice(0,2).join('; '); }
+}).catch(() => {});
+
+/* ================= generate / import ================= */
+const overlay = (show, stage, pct, note) => { $('overlay').classList.toggle('show', show); if (stage) $('ovStage').textContent = stage; if (pct != null) $('ovBar').style.width = (pct*100)+'%'; $('ovNote').textContent = note || ''; };
+async function openJob(j, refit=true){
+  job = j; resetEdits();
+  $('layFlat').checked = ['inflate','depth'].includes(j.params?.method) && !!j.params?.flat_back;
+  await showModel(refit); setReady(true); await refreshInfo();
+  if (!session.find(s => s.id === j.id)) session.unshift(j); renderHist();
+}
+$('go').onclick = async () => {
+  if (!file) return; $('go').disabled = true; setReady(false);
+  const fd = new FormData(); fd.append('file', file); fd.append('method', method); fd.append('resolution', $('res').value);
+  fd.append('remove_bg', $('removeBg').checked); fd.append('fg_ratio', $('fg').value/100);
+  fd.append('puff', $('puff').value/100); fd.append('detail', $('detail').value/100); fd.append('flat_back', $('flatBack').checked);
+  overlay(true, 'Uploading…', 0.02);
+  try{
+    const r = await fetch('/api/jobs', {method:'POST', body:fd}); if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    let j = await r.json(); const t0 = Date.now();
+    while (j.status === 'queued' || j.status === 'running'){
+      await new Promise(r => setTimeout(r, 1000)); j = await (await fetch('/api/jobs/' + j.id)).json();
+      overlay(true, j.stage, j.progress, `${Math.round((Date.now()-t0)/1000)} s elapsed`);
+    }
+    if (j.status === 'error') throw new Error(j.error);
+    await openJob(j);
+  }catch(e){ alert('Generation failed: ' + e.message); }
+  finally{ overlay(false); $('go').disabled = !file; }
+};
+async function importModel(f){
+  overlay(true, 'Importing ' + f.name + '…', 0.3);
+  try{
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('/api/import', {method:'POST', body:fd}); if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    await openJob(await r.json());
+  }catch(e){ alert('Import failed: ' + e.message); } finally{ overlay(false); }
+}
+$('importBtn').onclick = () => $('impFile').click(); $('impFile').onchange = e => e.target.files[0] && importModel(e.target.files[0]);
+
+function renderHist(){
+  const h = $('hist'); h.innerHTML = ''; $('histNote').style.display = session.length ? 'none' : '';
+  session.forEach(j => { const i = new Image(); i.src = `/api/jobs/${j.id}/input.png`; i.title = j.name; i.className = j.id === job?.id ? 'on' : ''; i.onclick = () => openJob(j); h.appendChild(i); });
+}
+
+/* ================= export ================= */
+exportBtns.forEach(b => b.onclick = async () => {
+  const fmt = b.dataset.fmt; b.disabled = true;
+  try{
+    const r = await fetch(`/api/jobs/${job.id}/export?format=${fmt}&height_mm=${sizeMm()}&lay_flat=${$('layFlat').checked}&plinth=${plinthMm()}&${editQuery()}`);
+    if (!r.ok) throw new Error(r.statusText);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = `model-${job.id}.${fmt}`; a.click();
+    $('exportNote').textContent = `${fmt.toUpperCase()} saved · ${r.headers.get('X-Size-Mm')} mm · watertight: ${r.headers.get('X-Watertight')}` + (r.headers.get('X-Repair') && !['None','already-closed'].includes(r.headers.get('X-Repair')) ? ` (repair: ${r.headers.get('X-Repair')})` : '');
+  }catch(e){ alert('Export failed: ' + e.message); } finally{ b.disabled = false; }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image to 3D Studio</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2b303b;--text:#e8eaf0;--mute:#8d95a6;--acc:#7c9cff;--acc2:#5b7bf0;--ok:#4cc38a;--warn:#f0b35b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.app{display:grid;grid-template-columns:340px 1fr;height:100vh}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:16px}
+h1{font-size:17px;margin:0 0 2px}
+.sub{color:var(--mute);font-size:12px;margin-bottom:14px}
+h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:18px 0 8px}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--mute);cursor:pointer;background:var(--panel2)}
+.drop.over{border-color:var(--acc);color:var(--text)}
+.drop b{color:var(--text)}
+.thumbs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.thumbs figure{margin:0}
+.thumbs canvas{width:100%;border-radius:6px;background:#000;display:block;aspect-ratio:1/1;object-fit:contain}
+.thumbs figcaption{font-size:11px;color:var(--mute);margin-top:3px}
+.row{margin:10px 0}
+.row label{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);margin-bottom:3px}
+.row label span{color:var(--text);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--acc)}
+select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px}
+.chk{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13px}
+.chk input{accent-color:var(--acc)}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc2);border-color:var(--acc2);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.full{width:100%}
+main{position:relative;min-width:0}
+#view{position:absolute;inset:0}
+#view canvas{display:block}
+.hud{position:absolute;left:14px;bottom:14px;right:14px;display:flex;justify-content:space-between;gap:12px;pointer-events:none;font-size:12px;color:var(--mute)}
+.hud>div{background:#0f1115cc;border:1px solid var(--line);padding:6px 10px;border-radius:8px}
+#status{position:absolute;top:14px;left:14px;right:14px;max-width:520px;background:#171a21ee;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:none}
+#status.show{display:block}
+.bar{height:5px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.note{font-size:12px;color:var(--mute);margin-top:6px}
+@media (max-width:820px){.app{grid-template-columns:1fr;grid-template-rows:55vh auto;height:auto}main{order:-1;height:55vh}aside{border-right:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>Image to 3D Studio</h1>
+  <div class="sub">Turn any picture into a 3D relief model. Runs fully in your browser.</div>
+
+  <div class="drop" id="drop"><b>Drop an image</b>, click to browse, or paste (Ctrl/Cmd+V)<input id="file" type="file" accept="image/*" hidden></div>
+  <button class="full" id="sample" style="margin-top:8px">Load sample image</button>
+
+  <div class="thumbs">
+    <figure><canvas id="tImg" width="160" height="160"></canvas><figcaption>Source</figcaption></figure>
+    <figure><canvas id="tDepth" width="160" height="160"></canvas><figcaption>Depth map</figcaption></figure>
+  </div>
+
+  <h2>Depth source</h2>
+  <select id="mode">
+    <option value="ai">AI depth estimation (Depth Anything)</option>
+    <option value="bright">Brightness heightmap</option>
+  </select>
+  <div class="note" id="modeNote">First AI run downloads a ~25&nbsp;MB model, then it is cached by your browser.</div>
+  <button class="full" id="runAI" style="margin-top:8px">Re-run AI depth</button>
+
+  <h2>Shape</h2>
+  <div class="row"><label>Width (mm) <span id="vW"></span></label><input id="width" type="range" min="20" max="250" value="100"></div>
+  <div class="row"><label>Relief depth (mm) <span id="vD"></span></label><input id="depth" type="range" min="1" max="80" step="0.5" value="18"></div>
+  <div class="row"><label>Mesh resolution <span id="vR"></span></label><input id="res" type="range" min="64" max="448" step="16" value="256"></div>
+  <div class="row"><label>Smoothing <span id="vS"></span></label><input id="smooth" type="range" min="0" max="12" value="2"></div>
+  <div class="row"><label>Contrast curve (gamma) <span id="vG"></span></label><input id="gamma" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+  <div class="row"><label>Flatten background (depth floor) <span id="vF"></span></label><input id="floor" type="range" min="0" max="0.9" step="0.01" value="0"></div>
+  <div class="row"><label>Base thickness (mm) <span id="vB"></span></label><input id="base" type="range" min="0.5" max="20" step="0.5" value="3"></div>
+  <div class="chk"><input type="checkbox" id="invert"><label for="invert">Invert depth</label></div>
+  <div class="chk"><input type="checkbox" id="solid" checked><label for="solid">Solid watertight body (for 3D printing)</label></div>
+
+  <h2>View</h2>
+  <div class="chk"><input type="checkbox" id="tex" checked><label for="tex">Apply image as texture</label></div>
+  <div class="chk"><input type="checkbox" id="wire"><label for="wire">Wireframe</label></div>
+  <div class="chk"><input type="checkbox" id="spin"><label for="spin">Auto-rotate</label></div>
+
+  <h2>Export</h2>
+  <div class="btns">
+    <button class="primary" id="xSTL">STL</button>
+    <button class="primary" id="xOBJ">OBJ</button>
+    <button class="primary" id="xGLB">GLB</button>
+  </div>
+  <div class="note">STL is in millimetres, Z-up, ready for a slicer. OBJ downloads as a zip with the texture and material file. GLB keeps the image texture.</div>
+</aside>
+<main>
+  <div id="view"></div>
+  <div id="status"><div id="stText"></div><div class="bar"><i id="stBar"></i></div></div>
+  <div class="hud"><div id="info">No model yet</div><div>Drag to orbit · scroll to zoom · right-drag to pan</div></div>
+</main>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {STLExporter} from 'three/addons/exporters/STLExporter.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+
+const $ = id => document.getElementById(id);
+
+/* ---------- state ---------- */
+const imgCanvas = document.createElement('canvas');   // source image (<=1024px)
+const depthCanvas = document.createElement('canvas'); // AI depth map
+let hasImage = false, hasDepth = false, aspect = 1;
+let depthPipe = null, aiBusy = false;
+let mesh = null, texture = null, lastGeo = null;
+
+/* ---------- three.js scene ---------- */
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14171d);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+camera.position.set(0, -80, 170);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445066, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-120, 150, 200); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9db4ff, 0.8); rim.position.set(150, -80, 60); scene.add(rim);
+const grid = new THREE.GridHelper(400, 40, 0x2b303b, 0x20242d); grid.rotation.x = Math.PI/2; grid.position.z = -30; scene.add(grid);
+
+function resize(){
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+(function loop(){ requestAnimationFrame(loop); controls.autoRotate = $('spin').checked; controls.autoRotateSpeed = 2.5; controls.update(); renderer.render(scene, camera); })();
+
+/* ---------- UI helpers ---------- */
+const sliders = {width:'vW', depth:'vD', res:'vR', smooth:'vS', gamma:'vG', floor:'vF', base:'vB'};
+function syncLabels(){ for (const [k,v] of Object.entries(sliders)) $(v).textContent = $(k).value; }
+function status(text, pct){
+  const s = $('status'); if (text == null){ s.classList.remove('show'); return; }
+  s.classList.add('show'); $('stText').textContent = text;
+  $('stBar').style.width = (pct == null ? 0 : pct) + '%';
+}
+function drawThumb(canvas, src){
+  const c = canvas.getContext('2d'); c.fillStyle = '#000'; c.fillRect(0,0,canvas.width,canvas.height);
+  if (!src) return;
+  const r = Math.min(canvas.width/src.width, canvas.height/src.height);
+  const w = src.width*r, h = src.height*r;
+  c.drawImage(src, (canvas.width-w)/2, (canvas.height-h)/2, w, h);
+}
+
+/* ---------- image loading ---------- */
+function setImage(bitmapSource){
+  const sw = bitmapSource.naturalWidth || bitmapSource.width, sh = bitmapSource.naturalHeight || bitmapSource.height;
+  const s = Math.min(1, 1024/Math.max(sw, sh));
+  imgCanvas.width = Math.max(2, Math.round(sw*s)); imgCanvas.height = Math.max(2, Math.round(sh*s));
+  imgCanvas.getContext('2d').drawImage(bitmapSource, 0, 0, imgCanvas.width, imgCanvas.height);
+  aspect = imgCanvas.width/imgCanvas.height;
+  hasImage = true; hasDepth = false;
+  drawThumb($('tImg'), imgCanvas); drawThumb($('tDepth'), null);
+  texture?.dispose(); texture = new THREE.CanvasTexture(imgCanvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8;
+  if ($('mode').value === 'ai') runDepth(); else rebuild(true);
+}
+function loadFile(f){
+  if (!f || !f.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(f); const im = new Image();
+  im.onload = () => { setImage(im); URL.revokeObjectURL(url); };
+  im.onerror = () => status('Could not read that image file.');
+  im.src = url;
+}
+$('drop').onclick = () => $('file').click();
+$('file').onchange = e => loadFile(e.target.files[0]);
+['dragenter','dragover'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave','drop'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+addEventListener('paste', e => { for (const it of e.clipboardData.items) if (it.type.startsWith('image/')) loadFile(it.getAsFile()); });
+
+$('sample').onclick = () => {                 // procedural sample so the app works instantly
+  const c = document.createElement('canvas'); c.width = 640; c.height = 480; const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0,0,0,480); bg.addColorStop(0,'#1b2a4a'); bg.addColorStop(1,'#0c1220'); g.fillStyle = bg; g.fillRect(0,0,640,480);
+  const blob = (x,y,r,a,b) => { const rg = g.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r); rg.addColorStop(0,a); rg.addColorStop(1,b); g.fillStyle = rg; g.beginPath(); g.arc(x,y,r,0,7); g.fill(); };
+  blob(320,250,170,'#fff4c2','#e0803a'); blob(170,330,80,'#d4f5ff','#2f8fd0'); blob(480,330,90,'#ffd0e6','#c43c80'); blob(320,110,45,'#ffffff','#7ad39a');
+  g.fillStyle = '#000'; g.font = 'bold 54px sans-serif'; g.textAlign = 'center'; g.fillText('3D', 320, 270);
+  $('mode').value = 'bright'; onModeChange(); setImage(c);
+};
+
+/* ---------- AI depth ---------- */
+async function loadModel(){
+  if (depthPipe) return depthPipe;
+  status('Loading AI library…', 2);
+  const tf = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+  tf.env.allowLocalModels = false;
+  depthPipe = await tf.pipeline('depth-estimation', 'Xenova/depth-anything-small-hf', {
+    progress_callback: p => {
+      if (p.status === 'progress') status(`Downloading depth model… ${Math.round(p.progress)}%`, p.progress);
+      else if (p.status === 'ready') status('Model ready', 100);
+    }
+  });
+  return depthPipe;
+}
+async function runDepth(){
+  if (!hasImage || aiBusy) return;
+  aiBusy = true; $('runAI').disabled = true;
+  try {
+    const pipe = await loadModel();
+    status('Estimating depth…', 60);
+    const blob = await new Promise(r => imgCanvas.toBlob(r, 'image/png'));
+    const url = URL.createObjectURL(blob);
+    const out = await pipe(url); URL.revokeObjectURL(url);
+    const d = out.depth, n = d.width*d.height, rgba = new Uint8ClampedArray(n*4);
+    for (let i=0;i<n;i++){ const v = d.data[i]; rgba[i*4]=rgba[i*4+1]=rgba[i*4+2]=v; rgba[i*4+3]=255; }
+    depthCanvas.width = d.width; depthCanvas.height = d.height;
+    depthCanvas.getContext('2d').putImageData(new ImageData(rgba, d.width, d.height), 0, 0);
+    hasDepth = true; drawThumb($('tDepth'), depthCanvas);
+    status(null); rebuild(true);
+  } catch (err) {
+    console.error(err);
+    status('AI depth failed (' + (err.message || err) + '). Check your internet connection (the model loads from huggingface.co). Using brightness heightmap instead.');
+    $('mode').value = 'bright'; onModeChange();
+  } finally { aiBusy = false; $('runAI').disabled = false; }
+}
+$('runAI').onclick = () => { $('mode').value = 'ai'; hasDepth = false; runDepth(); };
+function onModeChange(){
+  const ai = $('mode').value === 'ai';
+  $('runAI').style.display = ai ? '' : 'none';
+  $('modeNote').textContent = ai ? 'First AI run downloads a ~25 MB model, then it is cached by your browser.' : 'Lighter pixels are raised, darker pixels are lowered. Best for logos, lithophanes, textures.';
+  if (!hasImage) return;
+  if (ai && !hasDepth) runDepth(); else rebuild(true);
+}
+$('mode').onchange = onModeChange;
+
+/* ---------- height field ---------- */
+function boxBlur(a, w, h, r){
+  if (r < 1) return a;
+  const t = new Float32Array(a.length);
+  for (let y=0;y<h;y++){ let s=0; const o=y*w;
+    for (let x=-r;x<=r;x++) s += a[o+Math.min(w-1,Math.max(0,x))];
+    for (let x=0;x<w;x++){ t[o+x] = s/(2*r+1); s += a[o+Math.min(w-1,x+r+1)] - a[o+Math.max(0,x-r)]; } }
+  for (let x=0;x<w;x++){ let s=0;
+    for (let y=-r;y<=r;y++) s += t[Math.min(h-1,Math.max(0,y))*w+x];
+    for (let y=0;y<h;y++){ a[y*w+x] = s/(2*r+1); s += t[Math.min(h-1,y+r+1)*w+x] - t[Math.max(0,y-r)*w+x]; } }
+  return a;
+}
+function heightField(nx, ny){
+  const useDepth = $('mode').value === 'ai' && hasDepth;
+  const c = document.createElement('canvas'); c.width = nx; c.height = ny;
+  const g = c.getContext('2d', {willReadFrequently:true}); g.imageSmoothingQuality = 'high';
+  g.drawImage(useDepth ? depthCanvas : imgCanvas, 0, 0, nx, ny);
+  const px = g.getImageData(0,0,nx,ny).data, h = new Float32Array(nx*ny);
+  for (let i=0;i<h.length;i++){
+    h[i] = useDepth ? px[i*4]/255 : (0.2126*px[i*4] + 0.7152*px[i*4+1] + 0.0722*px[i*4+2])/255;
+  }
+  if ($('invert').checked) for (let i=0;i<h.length;i++) h[i] = 1 - h[i];
+  const fl = +$('floor').value, gm = +$('gamma').value;
+  for (let i=0;i<h.length;i++){ let v = Math.max(0, (h[i]-fl)/(1-fl)); h[i] = Math.pow(v, gm); }
+  for (let k=0;k<2;k++) boxBlur(h, nx, ny, Math.round(+$('smooth').value/2));
+  return h;
+}
+
+/* ---------- mesh ---------- */
+function buildGeometry(){
+  const W = +$('width').value, D = +$('depth').value, B = +$('base').value, solid = $('solid').checked;
+  const nx = +$('res').value, ny = Math.max(8, Math.round(nx/aspect)), Hh = W/aspect;
+  const h = heightField(nx, ny), N = nx*ny, layers = solid ? 2 : 1;
+  const pos = new Float32Array(N*layers*3), uv = new Float32Array(N*layers*2);
+  for (let j=0;j<ny;j++) for (let i=0;i<nx;i++){
+    const k = j*nx+i, x = (i/(nx-1)-.5)*W, y = (.5-j/(ny-1))*Hh;
+    pos.set([x,y,h[k]*D], k*3); uv.set([i/(nx-1), 1-j/(ny-1)], k*2);
+    if (solid){ pos.set([x,y,-B], (N+k)*3); uv.set([i/(nx-1), 1-j/(ny-1)], (N+k)*2); }
+  }
+  const idx = [];
+  const T = (i,j) => j*nx+i, Bt = (i,j) => N + j*nx+i;
+  for (let j=0;j<ny-1;j++) for (let i=0;i<nx-1;i++){
+    const a=T(i,j), b=T(i+1,j), c=T(i,j+1), d=T(i+1,j+1);
+    idx.push(a,c,d, a,d,b);
+    if (solid){ const A=Bt(i,j), Bb=Bt(i+1,j), C=Bt(i,j+1), Dd=Bt(i+1,j+1); idx.push(A,Dd,C, A,Bb,Dd); }
+  }
+  if (solid){                                    // side walls, boundary walked counter-clockwise from +Z
+    const ring = [];
+    for (let i=0;i<nx;i++) ring.push([i,ny-1]);
+    for (let j=ny-2;j>=0;j--) ring.push([nx-1,j]);
+    for (let i=nx-2;i>=0;i--) ring.push([i,0]);
+    for (let j=1;j<ny-1;j++) ring.push([0,j]);
+    for (let k=0;k<ring.length;k++){
+      const [pi,pj] = ring[k], [qi,qj] = ring[(k+1)%ring.length];
+      const Tp=T(pi,pj), Tq=T(qi,qj), Bp=Bt(pi,pj), Bq=Bt(qi,qj);
+      idx.push(Tp,Bp,Bq, Tp,Bq,Tq);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv,2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  return {geo, W, Hh, D, B, solid, tris: idx.length/3};
+}
+
+let t = null;
+function rebuild(fit){ if (!hasImage) return; clearTimeout(t); t = setTimeout(() => doBuild(fit), 60); }
+function doBuild(fit){
+  const m = buildGeometry();
+  if (mesh){ scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+  const useTex = $('tex').checked;
+  const mat = new THREE.MeshStandardMaterial({
+    color: useTex ? 0xffffff : 0xc9ccd4, map: useTex ? texture : null,
+    roughness: .75, metalness: 0, side: m.solid ? THREE.FrontSide : THREE.DoubleSide, wireframe: $('wire').checked
+  });
+  mesh = new THREE.Mesh(m.geo, mat); scene.add(mesh); lastGeo = m;
+  grid.position.z = -(m.solid ? m.B : 0) - 0.5;
+  $('info').textContent = `${m.W.toFixed(0)} × ${m.Hh.toFixed(0)} × ${(m.D + (m.solid ? m.B : 0)).toFixed(1)} mm · ${m.tris.toLocaleString()} triangles`;
+  if (fit){
+    const r = Math.max(m.W, m.Hh);
+    camera.position.set(0, -r*.55, r*1.35); controls.target.set(0,0,m.D/3); controls.update();
+  }
+}
+['width','depth','res','smooth','gamma','floor','base','invert','solid','tex','wire'].forEach(id =>
+  $(id).addEventListener('input', () => { syncLabels(); rebuild(false); }));
+
+/* ---------- export ---------- */
+function download(blob, name){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+const need = () => { if (!mesh){ status('Load an image first.'); setTimeout(() => status(null), 2000); return false; } return true; };
+
+$('xSTL').onclick = () => {
+  if (!need()) return;
+  if (!lastGeo.solid) status('Tip: enable "Solid watertight body" for printable STL files.');
+  const dv = new STLExporter().parse(mesh, {binary:true});
+  download(new Blob([dv], {type:'model/stl'}), 'image-model.stl');
+};
+$('xGLB').onclick = () => {
+  if (!need()) return;
+  new GLTFExporter().parse(mesh, buf => download(new Blob([buf], {type:'model/gltf-binary'}), 'image-model.glb'),
+    err => status('GLB export failed: ' + err.message), {binary:true});
+};
+$('xOBJ').onclick = async () => {
+  if (!need()) return;
+  const g = mesh.geometry, p = g.attributes.position, u = g.attributes.uv, n = g.attributes.normal, ix = g.index.array;
+  const useTex = $('tex').checked, L = ['# Image to 3D Studio', useTex ? 'mtllib model.mtl' : '', 'o image_model'];
+  for (let i=0;i<p.count;i++) L.push(`v ${p.getX(i).toFixed(4)} ${p.getY(i).toFixed(4)} ${p.getZ(i).toFixed(4)}`);
+  for (let i=0;i<u.count;i++) L.push(`vt ${u.getX(i).toFixed(5)} ${u.getY(i).toFixed(5)}`);
+  for (let i=0;i<n.count;i++) L.push(`vn ${n.getX(i).toFixed(4)} ${n.getY(i).toFixed(4)} ${n.getZ(i).toFixed(4)}`);
+  if (useTex) L.push('usemtl mat0');
+  for (let i=0;i<ix.length;i+=3){ const a=ix[i]+1,b=ix[i+1]+1,c=ix[i+2]+1; L.push(`f ${a}/${a}/${a} ${b}/${b}/${b} ${c}/${c}/${c}`); }
+  const obj = L.join('\n');
+  if (!useTex){ download(new Blob([obj], {type:'text/plain'}), 'image-model.obj'); return; }
+  const zip = new JSZip();
+  zip.file('model.obj', obj);
+  zip.file('model.mtl', 'newmtl mat0\nKa 1 1 1\nKd 1 1 1\nKs 0 0 0\nmap_Kd texture.png\n');
+  zip.file('texture.png', await new Promise(r => imgCanvas.toBlob(r, 'image/png')));
+  download(await zip.generateAsync({type:'blob'}), 'image-model-obj.zip');
+};
+
+syncLabels(); onModeChange();
+</script>
+</body>
+</html>

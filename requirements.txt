@@ -1,0 +1,24 @@
+# --- web app / mesh tools (always required) ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+numpy<2
+pillow>=10
+trimesh>=4.0.5
+scipy
+networkx
+
+# --- TripoSR dependencies (torch + torchvision are installed first by install.sh) ---
+omegaconf==2.3.0
+einops==0.7.0
+transformers==4.35.0
+huggingface-hub<0.26
+rembg
+onnxruntime
+imageio
+pillow-heif
+scikit-image
+gradio_client
+fast-simplification
+mapbox-earcut
+shapely
