@@ -89,3 +89,4 @@ I3D_CLOUD_SPACE=owner/space ./run.sh           # use a different TRELLIS-compati
 
 Free Spaces can be busy, asleep or change their API. If Cloud HQ errors, the message says why (and prints the Space's API when the call signature changed).
 # 3D-ai-modeling
+# 3D-ai-modeling
